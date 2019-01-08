@@ -1,0 +1,91 @@
+--防丢空表
+Select 'alter table '||table_name||' allocate extent;' from user_tables where num_rows=0
+
+exp TMS/TMS@SPMIS file=D:\20141107.dmp
+
+exp IPSS_XY/IPSS_XY@192.168.20.150/orcl file=d:\ipss_20170407.dmp
+
+exp ITSM_BETA/ITSM@192.168.25.15/devorcl file=d:\itsm_beta_20150415_tables.dmp tables=(cm_netypecategory,cm_netype,cm_netypelink,cm_netypeindex,cm_ne,cm_neindexrtvalue,cm_alarmrecord)
+
+IMP TMS/TMS FILE=C:\Users\Administrator\Desktop\dmp\20141107.dmp FROMUSER=TMS TOUSER=TMS ignore=y full=y;
+
+IMP IPSS/IPSS@192.168.20.150/orcl FILE=d:\ipssxy_20170407.dmp FROMUSER=IPSS_XY TOUSER=IPSS
+
+imp ITSM/ITSM@192.168.25.15/devorcl file=d:\itsm_beta_20150415_tables ignore=y tables=(cm_netypecategory,cm_netype,cm_netypelink,cm_netypeindex,cm_ne,cm_neindexrtvalue)
+
+--HaiNan_ITSM/JREAP_DATA
+
+--查询表空间所需文件位置
+select TABLESPACE_NAME,FILE_NAME from dba_temp_files;
+--创建表空间
+CREATE TABLESPACE SBPS_TP DATAFILE 'D:\ORACLE11G\ORADATA\ORCL\TEMP02.DBF' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE 200M;
+
+--创建用户赋权
+CREATE USER IPSS_XY IDENTIFIED BY IPSS_XY
+DEFAULT TABLESPACE DB_DATA_XY
+TEMPORARY TABLESPACE DB_TEMP;
+
+GRANT "CONNECT" TO "IPSS_XY";
+GRANT "RESOURCE" TO "IPSS_XY";
+GRANT "DBA" TO "IPSS_XY";
+GRANT "EXP_FULL_DATABASE" TO "IPSS_XY";
+GRANT "IMP_FULL_DATABASE" TO "IPSS_XY"; 
+
+--查看表空间使用情况
+SELECT a.tablespace_name,
+round(a.bytes / (1024 * 1024), 0) total,
+round(b.bytes / (1024 * 1024), 0) used,
+round(c.bytes / (1024 * 1024), 0) free,
+(b.bytes * 100) / a.bytes "% USED ",
+(c.bytes * 100) / a.bytes "% FREE "
+FROM sys.sm$ts_avail a, sys.sm$ts_used b, sys.sm$ts_free c
+WHERE a.tablespace_name = b.tablespace_name
+AND a.tablespace_name = c.tablespace_name; 
+
+--删锁
+select session_id from v$locked_object;
+SELECT sid, serial#, username, oSUSEr FROM v$session where sid = 118;
+ALTER SYSTEM KILL SESSION '118,31908';
+
+
+--重置所有用户密码
+update security_account set password=lower(Utl_Raw.Cast_To_Raw(sys.dbms_obfuscation_toolkit.md5(input_string => lower(login_name)||'1')));
+
+--mysql
+update security_account set password=lower(md5(concat(lower(login_name),'1')));
+
+--移动所有表和索引所在表空间到另一个表空间
+select 'alter table  '|| table_name ||'  move tablespace YXGK_platform;'  from user_tables;
+select 'alter index '|| index_name ||' rebuild tablespace YXGK_platform;' from user_indexes;
+alter table TEST_NEWS move tablespace YXGK_platform lob (REMARK) store as(tablespace YXGK_platform);--针对于大字段索引的移动，其中TEST_NEWS是表名REMARK是对应大字段列
+
+
+--删除当前连接的用户
+/* Formatted on 2015/3/17 9:50:08 (QP5 v5.227.12220.39754) */
+SELECT s.username,
+       s.osuser,
+       s.program,
+       s.MACHINE,
+       s.sid,
+       s.serial#,
+       p.spid,
+          'alter system kill session '
+       || ''''
+       || TRIM (s.sid)
+       || ','
+       || TRIM (s.serial#)
+       || ''';'
+  FROM v$session s, v$process p
+ WHERE s.paddr = p.addr AND s.username IS NOT NULL;
+
+
+---保留小数点后两位并且小数点前的0保留
+rtrim(to_char(0.215,'fm99999999990.99'),'.')
+
+
+---字符串转数字报错去除tab键数据
+update RL_CBGL_JSD a set a.JSRZ=trim(replace(a.JSRZ,chr(9),''));
+--忽略不能转为数字的
+SELECT A1,A2, ……, case when regexp_replace(XXX,'[0-9,.]', '') IS NULL then to_number(XXX) else 0 end AS XXX
+
+
